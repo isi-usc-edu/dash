@@ -1,0 +1,23 @@
+For those who are interested in the DASH framework and particularly applications of DASH to modeling security scenarios we provide a brief discussion of recent work that may serve useful.
+
+Blythe and Camp (blythe_spw_2012.pdf) [1] discuss human behavior simulations can be built from mental models to predict user behavior. This is demonstrated by the creation of a simulation incorporating mental models from Wash [1a] using Deter agents, a precursor to and component of the initial DASH framework implemented in Prolog and Java.
+
+Blythe (blythe_isrcs_2012.pdf) [2] advocate the use of agent-based models that incorporate reaction planning, mental models, and the dual process model of cognition to model human errors and aid in the design of better systems to reduce occurrence of such errors. This is done by simulating the Three Mile Island accident, which has been attributed to human factors problems, using Deter.
+
+Kothari et al. (kothari_acyse_2014.pdf) [3] argue the value of human-centric agent-based modeling approaches to understanding human behavior, especially circumventive behaviors. The primary example scenario involves setting the best timeout threshold for proximity sensors in a hospital so as to optimize security without unintended security repercussions resulting from routine circumvention (e.g., users placing styrofoam cups over the sensors to defeat them). Alternative methods to proximity sensors, other applications of agent-based modeling, and future work are also discussed.
+
+Kothari et al. (kothari_hotsos_2015.pdf) [4] discuss how security practitioners might employ agent-based models to better understand the security context within their organization to make better security decisions. This is exemplified with discussion of a password simulation, created using the DASH framework, to quantitatively assess the security afforded by a given security policy. The paper involves provides an overview of the password simulation, relays simulation details, discusses results, provides a sensitivity analysis, and discusses future work.
+
+Korbar et al. (korbar_aics_2106.pdf) [5] discuss the utility of agent-based modeling to improving security decisions, convey the intended goals of creating such human-focused security simulations, detail the password simulation and changes to it, and discuss validation attempts.
+
+[1] Blythe, Jim, and L. Jean Camp. "Implementing mental models." Security and privacy workshops (spw), 2012 ieee symposium on. IEEE, 2012.
+
+[1a] Wash, Rick. "Folk models of home computer security." Proceedings of the Sixth Symposium on Usable Privacy and Security. ACM, 2010.
+
+[2] Blythe, Jim. "A dual-process cognitive model for testing resilient control systems." Resilient Control Systems (ISRCS), 2012 5th International Symposium on. IEEE, 2012.
+
+[3] Kothari, Vijay, et al. "Agent-based modeling of user circumvention of security." Proceedings of the 1st International Workshop on Agents and CyberSecurity. ACM, 2014.
+
+[4] Kothari, Vijay, et al. "Measuring the security impacts of password policies using cognitive behavioral agent-based modeling." Proceedings of the 2015 Symposium and Bootcamp on the Science of Security. ACM, 2015.
+
+[5] Korbar, Bruno, et al. "Validating an Agent-Based Model of Human Password Behavior." Workshops at the Thirtieth AAAI Conference on Artificial Intelligence. 2016.

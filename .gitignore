@@ -1,0 +1,27 @@
+*.class
+
+# Package Files #
+*.war
+*.ear
+
+*.pyc
+.idea
+
+*.sublime*
+
+*.pyobj
+*.log
+*.aux
+
+build/
+dist/
+*egg-info/
+
+.cache/*
+
+# Mac related files
+.DS_Store
+
+# backup files
+*~
+
