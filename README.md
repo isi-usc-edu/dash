@@ -20,3 +20,7 @@ Dash2 can also be installed directly from github using pip with the following co
 pip install git+https://github.com/isi-usc-edu/dash.git
 ```
 
+## User Guide
+
+Description of DASH models, agents and programming guide can be found here: `docs/DASH_guide.docx` .
+
