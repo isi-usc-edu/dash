@@ -47,12 +47,11 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
                 smtp.quit()
                 return[{}]
             except Exception as e:
-                return []
+                return[{}]
         else:
             status, data = self.sendAction("sendMail",
                                              [{'to': self.colleague, 'subject': 'buyTickets',
                                                'body': 'I want to go to ' + trip + str(self.mailCounter)}])
-            self.mailCounter += 1
             if status == "success":
                 print('send mail success with data', data)
                 return [{}]
@@ -74,5 +73,5 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    smtp = smtplib.SMTP('mailserver.logging-test.modeling')
+    smtp = None smtplib.SMTP('mailserver.logging-test.modeling')
     MailSender(args).agent_loop()
