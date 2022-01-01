@@ -2,7 +2,7 @@
 # reading and sending mail, with known email addresses, and k attacker agents sending phish.
 # Based on nurse_experiment.py (probably should extract a reusable test harness from this).
 from random import sample
-
+import sys; sys.path.extend(['../../'])
 from Dash2.phish.mailReader import MailReader
 import random
 import numpy
@@ -26,8 +26,8 @@ def trial(objective, args, num_workers=1, num_recipients=4, num_phishers=1,  # n
 
     workers = []
     domain = '@amail.com'
-    for i in range(0, num_workers):
-        w = MailReader('mailagent' + str(i + 1) + domain, args)
+    for i in range(1, num_workers):
+        w = MailReader(i, args)
         workers.append(w)
         choose_gender_personality(w)
         choose_recipients(w, i, num_workers, num_recipients, domain=domain)
@@ -36,7 +36,7 @@ def trial(objective, args, num_workers=1, num_recipients=4, num_phishers=1,  # n
             setattr(w, field, worker_fields[field])
         w.traceLoop = False
 
-    phisher = MailReader('phisher@bmail.com', args)
+    phisher = MailReader('phisher', args)
     choose_victims(phisher, phish_targets, num_workers, domain=domain)
     print('phisher mail stack length', len(phisher.mail_stack))
     phisher.active = True
@@ -196,19 +196,7 @@ def run_trials(num_trials, objective, args, num_workers=50, num_recipients=10,  
 
 def get_args():
     parser = argparse.ArgumentParser(description='Create mail reader config.')
-    parser.add_argument(
-        '--use-mailserver', dest='use_mailserver', default=False,
-        action='store_const', const=True, help='Use mail server to send emails'
-    )
-    parser.add_argument(
-        '--project-name', type=str, dest='project_name',
-        help='Specify DETER project name'
-    )
-    parser.add_argument(
-        '--experiment-name', type=str, dest='experiment_name',
-        help='Specify DETER experiment name'
-    )
-
+    parser.add_argument('--mailserver', dest='mailserver', action='store', type=str,  help='Use mail server to send emails')
     return parser.parse_args()
 
 

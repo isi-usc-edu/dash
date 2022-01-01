@@ -1,57 +1,47 @@
 import sys; sys.path.extend(['../../'])
+from Dash2.core.dash_agent import DASHAgent
+from Dash2.core.system2 import isVar
+import argparse
+from imapclient import IMAPClient
 import random
 import copy
-from Dash2.core.dash_agent import DASHAgent
 from Dash2.core.parameter import Parameter, Uniform, TruncNorm, Boolean
+import email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-import imapclient
 import smtplib
-#import pyzmail
 
 
 class MailReader(DASHAgent):
 
     # Class-level information about parameter probability distributions
-                  # If the message is phish, it is recognized with this constant probability
+    # If the message is phish, it is recognized with this constant probability
     parameters = [#Parameter('probability_recognize_phish', distribution=TruncNorm(0.6, 0.2, 0, 1)),
-                  Parameter('probability_recognize_phish', default=0.1),
-                  Parameter('probability_click_unrecognized_phish', distribution=Uniform(0.5, 0.5)),
-                  # messages are scored from 0 to 1 and classified as phish if they score over this threshold
-                  # (This number isn't currently used, since we return a score above or below based on whether
-                  # the agent identifies the message as phish, not the other way around.)
-                  Parameter('phishiness_threshold', distribution=Uniform(0.3, 0.7), default=0.5),
-                  Boolean('send_mail_all_at_once', default=True),
-                  # probability that email deemed to be legitimate mail will be forwarded to a friend or colleague.
-                  # Shortly this should be calculated based on agreeableness, extraversion and conscientiousness.
-                  Parameter('forward_probability', default={'leisure': 0.8, 'work': 0.8}),
-                  Parameter('number_forwarding_recipients', default=1),  # Number of recipients when a mail is forwarded
-                  # Threshold at which actions suggested by system 1 are chosen. At 0.3 this scenario uses only
-                  # goal-directed actions. At 0.2 the agent clicks a link in the email once, then carries on with the
-                  # goal. At 0.1 it clicks two links.
-                  Parameter('system1_threshold', default=0.3)  # turned off for FARM experiments
-                  ]
-
-    def __init__(self, address, args=None, register=True):
+        Parameter('probability_recognize_phish', default=0.1),
+        Parameter('probability_click_unrecognized_phish', distribution=Uniform(0.5, 0.5)),
+        # messages are scored from 0 to 1 and classified as phish if they score over this threshold
+        # (This number isn't currently used, since we return a score above or below based on whether
+        # the agent identifies the message as phish, not the other way around.)
+        Parameter('phishiness_threshold', distribution=Uniform(0.3, 0.7), default=0.5),
+        Boolean('send_mail_all_at_once', default=True),
+        # probability that email deemed to be legitimate mail will be forwarded to a friend or colleague.
+        # Shortly this should be calculated based on agreeableness, extraversion and conscientiousness.
+        Parameter('forward_probability', default={'leisure': 0.8, 'work': 0.8}),
+        Parameter('number_forwarding_recipients', default=1),  # Number of recipients when a mail is forwarded
+        # Threshold at which actions suggested by system 1 are chosen. At 0.3 this scenario uses only
+        # goal-directed actions. At 0.2 the agent clicks a link in the email once, then carries on with the
+        # goal. At 0.1 it clicks two links.
+        Parameter('system1_threshold', default=0.3)  # turned off for FARM experiments
+    ]
+    
+    
+    def __init__(self, i, args, register=True):
         DASHAgent.__init__(self)
-
-        if args is not None:
-            self.use_mailserver = args.use_mailserver
-            self.project_name = args.project_name
-            self.experiment_name = args.experiment_name
-        else:
-            self.use_mailserver = None
-            self.project_name = None
-            self.experiment_name = None
-
-
+        self.mailserver = args.mailserver
+        self.last_id = 0
         self.trace_client = False
-        #self.traceAction = True
-
-        # Not currently used
-        #self.competence_with_internet = 0.5  # general level of competence e.g. Alseadoon et al. 12
 
         self.readAgent("""
 
@@ -81,14 +71,16 @@ goalRequirements sendMailFromStack(mail)
 transient doWork     # Agent will forget goal's achievement or failure as soon as it happens
 
                        """)
-
-        self.address = address
-        if not self.use_mailserver:
+        if (str(i) != "phisher"):
+            self.address = "mailagent" + str(i) +  "@" + self.mailserver
+        else:
+            self.address = i + "@" + self.mailserver
+        if not self.mailserver:
             if register:
                 if self.trace_client:
-                    print(('registering', address, 'prph', self.probability_recognize_phish,
+                    print(('registering', self.address, 'prph', self.probability_recognize_phish,
                           'pcuph', self.probability_click_unrecognized_phish))
-                self.register([address])    # Register with the running mail_hub
+                self.register([self.address])    # Register with the running mail_hub
 
         # Stack of emails to send. This way it is easy enough to task the agent with a set of emails, even dynamically.
         # Setting up with an initial mail to test. Should be the same behavior as with fixed email in the goal.
@@ -139,25 +131,36 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
 
     def read_mail(self, args_tuple1):
         (predicate, mail_var) = args_tuple1
-        if self.use_mailserver:
+        if self.mailserver:
             try:
                 user = self.address.split("@")[0]
                 data = {user:[]}
-
-                obj = imapclient.IMAPClient('mailserver' + '.' + self.experiment_name + '.' + self.project_name, ssl=False)
+                obj = IMAPClient(self.mailserver, ssl=False)
                 obj.login(user, 'password')
                 obj.select_folder('INBOX', readonly=False)
+            
                 mail_ids = obj.search(['SINCE', '01-Jan-2020'])
-                if self.trace_client:
-                    print(('mail ids for', self.address, mail_ids))
+
                 for mail_id in mail_ids:
-                    raw_mail = obj.fetch([mail_id], ['BODY[]', 'FLAGS'])
-                    message = pyzmail.PyzMessage.factory(raw_mail[mail_id]['BODY[]'])
-                    
+                    if mail_id <= self.last_id:
+                        continue
+                    #print("Read email with id ", mail_id)
+                    self.last_id = mail_id
+                    dataraw = obj.fetch([mail_id], ['BODY[]', 'FLAGS'])
+                    message = email.message_from_string((dataraw[mail_id][b'BODY[]']).decode())
+                    obj.delete_messages(mail_id)
+                    obj.expunge()
                     mail = {}
-                    mail['subject'] = str(message.get_subject())
-                    mail['to'] = str((', '.join(receiver[0] for receiver in message.get_addresses('to'))))
-                    mail['body'] = str(message.text_part.get_payload().decode(message.text_part.charset))
+                    mail['subject'] = message['subject']
+                    mail['to'] = message['to']
+                    #print("Subject ", mail['subject'], " to ", mail['to'])
+                    for part in message.walk():
+                        # each part is a either non-multipart, or another multipart message
+                        # that contains further parts... Message is organized like a tree
+                        if part.get_content_type() == 'text/plain':
+                            mail['body'] = part.get_payload()
+                            #print(part.get_payload()) # prints the raw text
+                            break
                     mail['attachment'] = str(message.get_payload()[1].get_filename())
                     mail['mode'] = 'work' if mail['attachment'] == 'budget.xlsx' else 'leisure'
                     data[user].append(mail)
@@ -168,13 +171,11 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
                         print('To: ' + (', '.join(receiver[0] for receiver in message.get_addresses('to'))))
                         print('Body: ' + message.text_part.get_payload().decode(message.text_part.charset))
                         print('Attachment: ' + message.get_payload()[1].get_filename() + '\n')
-                    obj.delete_messages(mail_id)
-                    obj.expunge()
                     self.mails_read += 1
-                
+                obj.logout()
                 return [{mail_var: data}]
             except Exception as e:
-                print('Error while receiving mail: %s' % e)
+                print('Error while receiving mail: %s' % e, " user ", user)
                 return []
         else:
             [status, data] = self.sendAction("getMail")
@@ -183,18 +184,19 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
                 return [{mail_var: data}]
             else:
                 return []
+    
 
-    # Adding a 'url' to the mail message so that we can record clicks. The message can be any dictionary object,
+   # Adding a 'url' to the mail message so that we can record clicks. The message can be any dictionary object,
     # although the mail_hub looks for a 'to' field to route it.
     def send_mail(self, goal):
-        if self.use_mailserver:
+        if self.mailserver:
             try:
                 mail_array = goal[1]
                 for mail in mail_array:
                     user = self.address.split("@")[0]
                     msg = MIMEMultipart()
-                    msg['From'] = user + '@mailserver.' + self.experiment_name + '.' + self.project_name
-                    msg['To'] = mail['to'].split("@")[0] + '@mailserver.' + self.experiment_name + '.' + self.project_name
+                    msg['From'] = user + '@'+ self.mailserver
+                    msg['To'] = mail['to'].split("@")[0] + '@' + self.mailserver
                     msg['Subject'] = mail['subject']
                     msg.attach(MIMEText(mail['body']))
 
@@ -204,9 +206,9 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
                     attachment.add_header('Content-Disposition', 'attachment; filename=' + mail['attachment'])
                     msg.attach(attachment)
 
-                    smtp = smtplib.SMTP('mailserver.' + self.experiment_name + '.' + self.project_name)
+                    smtp = smtplib.SMTP(self.mailserver)
                     smtp.sendmail(msg['From'], msg['To'], msg.as_string())
-                    print('send mail success from ' + msg['From'] + ' to ' + msg['To'] + ' with attachment ' + mail['attachment'])
+                    #print('send mail success from ' + msg['From'] + ' to ' + msg['To'] + ' with attachment ' + mail['attachment'])
                     smtp.quit()
                     self.mails_sent += 1
 
@@ -235,7 +237,7 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
     # At the moment all of the agent's work process for work-related email as well as response to phishing email
     # (which might present as work-related or as social/leisure) is handled in this primitive method.
     def process_mail(self, args_tuple2):
-        #print(self.address, 'processing', mail)
+        #print(self.address, 'processing')
 
         # Succeed if there's no mail
         (predicate, mail) = args_tuple2
@@ -340,11 +342,14 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
             s1node.add_neighbor(self.fact_to_node(['action', 'clickLinkInMail', mail]))
 
 
+def get_args():
+    parser = argparse.ArgumentParser(description='Create mail sender config.')
+    parser.add_argument('--mailserver', dest='mailserver', action='store', type=str,  help='Use mail server to send emails')
+    parser.add_argument('--address', dest='address', action='store', type=str,  help='Address to send from')
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    mr = MailReader('mailagent1@amail.com')
-    mr.agent_loop(20)
-    # Print out the system 1 nodes at the end
-    print('nodes:')
-    for node in mr.nodes:
-        print(' ', node)
+    args = get_args()
+    MailReader(args.address, args).agent_loop(20)
 

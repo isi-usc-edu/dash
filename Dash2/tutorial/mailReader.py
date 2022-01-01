@@ -2,17 +2,18 @@ import sys; sys.path.extend(['../../'])
 from Dash2.core.dash_agent import DASHAgent
 from Dash2.core.system2 import isVar
 import argparse
-import imapclient
-import pyzmail
+from imapclient import IMAPClient
+import email
+#import pyzmail
 
 
 class MailReader(DASHAgent):
 
     def __init__(self, args):
         DASHAgent.__init__(self)
-        self.use_mailserver = args.use_mailserver
-        if not self.use_mailserver:
-            self.register(['flightagent@amail.com'])    # Register with the running mail_hub
+        self.mailserver = args.mailserver
+        self.last_id = 0
+        self.register(['flightagent@amail.com'])    # Register with the running mail_hub
 
         self.readAgent("""
 goalWeight doWork 1
@@ -35,10 +36,10 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
         # Using this as a counter in the email that gets sent
         self.flights_to_buy = []
         self.mailCounter = 0
-
-    def flight_to_buy(self, goal_flight_tuple):
-        goal = goal_flight_tuple[0]
-        flight_variable = goal_flight_tuple[1]
+                
+    def flight_to_buy(self, goal_flight_variable_tuple):
+        goal = goal_flight_variable_tuple[0]
+        flight_variable = goal_flight_variable_tuple[1]
         if isVar(flight_variable):
             return [{flight_variable: flight} for flight in self.flights_to_buy]  # all possible bindings
         elif flight_variable in self.flights_to_buy:
@@ -55,23 +56,24 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
     def read_mail(self, goal_mail_var_tuple):
         goal = goal_mail_var_tuple[0]
         mail_var = goal_mail_var_tuple[1]
-        if self.use_mailserver:
-            data = []
-            obj = imapclient.IMAPClient('mailserver.logging-test.modeling', ssl=False)
+        if self.mailserver:
+            data_ = []
+            obj = IMAPClient(self.mailserver, ssl=False)
             obj.login('flightagent', 'password')
-            obj.select_folder('INBOX', readonly=False)
+            obj.select_folder('INBOX', readonly=True)
             mail_ids = obj.search(['SINCE', '01-Jan-2020'])
             for mail_id in mail_ids:
-                raw_mail = obj.fetch([mail_id], ['BODY[]', 'FLAGS'])
-                message = pyzmail.PyzMessage.factory(raw_mail[mail_id]['BODY[]'])
-                print(message.get_subject())
-                print(message.get_addresses('from'))
-                print(message.get_addresses('to'))
-                print(message.text_part.get_payload().decode(message.text_part.charset))
+                if mail_id <= self.last_id:
+                    continue
+                self.last_id = mail_id
+                data = obj.fetch([mail_id], ['BODY[]', 'FLAGS'])
+                body = email.message_from_string((data[mail_id][b'BODY[]']).decode())
+                print(body)
                 obj.delete_messages(mail_id)
                 obj.expunge()
-                data.append(message)
-            return [{mail_var: data}]
+                data_.append(body)
+            obj.logout()
+            return [{mail_var: data_}]
         else:
             [status, data] = self.sendAction("getMail")
             if status == "success":
@@ -84,6 +86,8 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
     def process_mail(self, goal_mail_list_tuple):
         goal = goal_mail_list_tuple[0]
         mail_list = goal_mail_list_tuple[1]
+
+        print('processing', mail_list)
         for mail in mail_list:
             if mail['subject'] == 'buyTickets':
                 # Body should be 'I want to go to ' + destination (which currently includes an email serial number)
@@ -102,10 +106,13 @@ transient doWork     # Agent will forget goal's achievement or failure as soon a
 
 def get_args():
     parser = argparse.ArgumentParser(description='Create mail sender config.')
-    parser.add_argument('--use_mailserver', dest='use_mailserver', default=False, action='store_const', const=True, help='Use mail server to send emails')
+    parser.add_argument('--mailserver', dest='mailserver', action='store', type=str,  help='Use mail server to send emails')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = get_args()
+    if (args.mailserver is not None):
+        print("Mailserver ", args.mailserver)
     MailReader(args).agent_loop()
+
